@@ -1,5 +1,13 @@
 #!/usr/bin/python3
-
+#
+# File name: socketc.py
+# Author: huangq@moxigroup.com
+#
+# Note: this file is the main logic for client connection, it
+# acts as an GUI input interface. Then it's responsible for
+# pasing packets to server side.
+#
+#
 import socket
 import json
 
