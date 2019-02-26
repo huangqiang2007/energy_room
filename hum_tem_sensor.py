@@ -10,6 +10,7 @@
 #
 import serial
 import time
+from dbg import *
 
 a = '01 03 00 00 00 02 C4 0B'
 a_bytes = bytes.fromhex(a)
@@ -24,14 +25,14 @@ def ser_close():
 def ser_read():
 	global ser
 	ser.write(a_bytes)
-	print('\nwrite: ' + str(a_bytes))
+	p_dbg(DBG_DEBUG, '\nwrite: ' + str(a_bytes))
 	time.sleep(0.2)
 	n = ser.inWaiting()
 	if n != 0:
 		data = ser.readline()
 		ser.flushInput()
 		if n != len(data):
-			print("recv: {} bytes, actual: {} bytes".format(n, len(data)))
+			p_dbg(DBG_DEBUG, "recv: {} bytes, actual: {} bytes".format(n, len(data)))
 			return(-1, -1)
 		humidity = (data[3] << 8) | data[4]
 		humidity = humidity / 10
@@ -46,7 +47,7 @@ def ser_read():
 
 def ser_get_sensor():
 	ser_open()
-	print('ser_get_sensor()\n')
+	p_dbg(DBG_DEBUG, "ser_get_sensor()\n")
 	(hum, tem) = ser_read()
 	return (hum, tem)
 
@@ -54,7 +55,7 @@ def ser_poll(interval):
 	while True:
 		(hum, tem) = ser_read()
 		if hum != -1 and tem != -1:
-			print('hum: %.1f%%RH, tem: %.1f \'C' %(hum, tem))
+			p_dbg(DBG_INFO, "hum: {.1f}%%RH, tem: {.1f}\'C".format(hum, tem))
 
 		time.sleep(interval)
 
