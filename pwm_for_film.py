@@ -147,7 +147,7 @@ def pwm_stop(ch):
 # dump all PWM channels' configuration
 #
 def pwm_dumpAll():
-	for ch in range(4):
+	for ch in range(len(channels)):
 		if (pwm_parameter[ch][7] == True):
 			print("PWM {}: [{}, {}, {}, {}, {}, {}, {}, {}], duty_ratio: {:.1f}%\n".format(ch, \
 				pwm_parameter[ch][0], pwm_parameter[ch][1], pwm_parameter[ch][2], \
@@ -164,7 +164,8 @@ def pwm_dumpAll():
 # stop all PWM channels
 #
 def pwm_stopAll():
-	for ch in range(4):
+	p_dbg(DBG_DEBUG, "pwm_stopAll()\n")
+	for ch in range(len(channels)):
 		if (pwm_parameter[ch][7] == True):
 			pwm_stop(ch)
 
