@@ -13,7 +13,6 @@ from threading import Condition, Thread
 import socketserver
 import queue
 import json
-#from hum_tem_sensor import *
 import hum_tem_sensor as hts
 from dbg import *
 
@@ -45,6 +44,7 @@ class MessagePaser:
 		self.request.sendall(str("hello world\n").encode())
 		print ("- send_test ...\n")
 
+	# the private function with '__' prefix
 	def __handle_sensor(self, json_dic):
 		(hum, tem) = hts.ser_get_sensor()
 		json_dic["hum"] = hum
@@ -68,7 +68,9 @@ class MessagePaser:
 		p_dbg(DBG_DEBUG, "msg id: {}\n".format(json_dic["id"]))
 		self.request.sendall(str.encode("__handle_blue_speaker()\n"))
 
-
+	#
+	# parse all UI sented packets and handle them seperately
+	#
 	def parseMessage(self, json_dic):
 		p_dbg(DBG_DEBUG, "parseMessage()\n")
 		j_id = json_dic["id"]
@@ -90,7 +92,9 @@ class MessagePaser:
 		else:
 			self.request.sendall(str.encode("can't parse id: {}".format(json_dic["id"])))
 
-
+#
+# fetch each message from queue and parse it
+#
 def consume_queue():
 	global message_parser
 	p_dbg(DBG_DEBUG, "consume_queue()\n")
@@ -98,7 +102,10 @@ def consume_queue():
 	j_dic = json.loads(j_dic_str)
 	message_parser.parseMessage(j_dic)
 
-
+#
+# one specific thread for consuming message queue
+# @con: Condition variable
+#
 def consum_thread(con):
 	p_dbg(DBG_DEBUG, "consum_thread()\n")
 	while(True):
@@ -111,6 +118,9 @@ def consum_thread(con):
 		else:
 			consume_queue()
 
+#
+# a socket server handler class needed by socketserver
+#
 class SockTCPHandler(socketserver.BaseRequestHandler):
 
 	def handle(self):
