@@ -45,6 +45,12 @@ pwm_parameter = [ \
 	[25, 24, 23, 0, 0, 0, 0, False] \
 ]
 
+#
+# the flag which indicates wp.wiringPiSetup() has
+# been called beforehand.
+#
+g_wiringpisetup_flag = False
+
 def pwm_getParIndex(ch, func):
 	if (ch < 0 and ch > 3):
 		p_dbg(DBG_ERROR, "{}(): channel {} is invalid.\n".format(func, ch))
@@ -56,7 +62,10 @@ def pwm_getParIndex(ch, func):
 # setup for wiringpi GPIO operation
 #
 def pwm_wiringPiSetup():
-	wp.wiringPiSetup()
+	global g_wiringpisetup_flag
+	if (g_wiringpisetup_flag == False):
+		wp.wiringPiSetup()
+		g_wiringpisetup_flag = True
 
 #
 # initilize one PWM channel to default state
@@ -129,6 +138,7 @@ def pwm_setSingleChannel(ch, in_out, low_high, period, duty):
 		p_dbg(DBG_ERROR, "PWM duty({}) is larger than period({}).\n".format(duty, period))
 		return -2
 	
+	pwm_wiringPiSetup()
 	pwm_init(ch, in_out, low_high)
 	pwm_setPeriod(ch, period)
 	pwm_setDuty(ch, duty)

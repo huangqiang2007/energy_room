@@ -8,30 +8,73 @@
 # pasing packets to server side.
 #
 #
+from threading import Timer, Condition, Thread
 import socket
 import json
 
 j_dic = {}
 
+hum_tem_dic = {}
+time_dic = {}
+heat_dic = {}
+misc_dic = {}
+
 client=socket.socket()
 client.connect(('localhost',9999))
 
+def get_hum_tem():
+	hid = input("humidify\nid: ")
+	hopcode = input("opcode: ")
+	hum_tem_dic["id"] = int(hid)
+	hum_tem_dic["opcode"] = int(hopcode)
+	client.send(str.encode(json.dumps(hum_tem_dic)))
+
+
+def set_heat():
+	hid = input("heatfilm\nid: ")
+	hopcode = input("opcode: ")
+	hzone = input("zone: ")
+	hval = input("value: ")
+	heat_dic["id"] = int(hid)
+	heat_dic["opcode"] = int(hopcode)
+	heat_dic["zone"] = int(hzone)
+	heat_dic["value"] = int(hval)
+	client.send(str.encode(json.dumps(heat_dic)))
+
+def set_time():
+	hid = input("timer\nid: ")
+	hopcode = input("opcode: ")
+	hval = input("value: ")
+	time_dic["id"] = int(hid)
+	time_dic["opcode"] = int(hopcode)
+	time_dic["value"] = int(hval)
+	client.send(str.encode(json.dumps(time_dic)))
+
+def recv_thread(client):
+	print("recv_thread()\n")
+	while (True):
+		dic_res = client.recv(1024)
+		print("\nrcv: " + dic_res.decode() + "\n")
+
+Thread(target = recv_thread, args = (client,)).start()
+
 while True:
-	jid=input("\nid> ")
-	if len(jid)==0:
-		continue
-	if jid == "quit":
+	jid = input("1. humidify 2. heat 3. timer\nwhich one? > ")
+	i_id = int(jid)
+	if (i_id == 0):
 		break
-	jtype = input("type> ")
-	jvalue = input("value> ")
-	j_dic["id"] = int(jid)
-	j_dic["type"] = int(jtype)
-	j_dic["value"] = int(jvalue)
-	j_dic_str = json.dumps(j_dic)
-	j_dic_bytes = str.encode(j_dic_str)
-#	print(j_dic_bytes)
-	client.send(j_dic_bytes)
-	dic_res=client.recv(1024)
-	print(dic_res.decode())
+
+	if (i_id == 1):
+		get_hum_tem()
+	elif (i_id == 2):
+		set_heat()
+	elif (i_id == 3):
+		set_time()
+	elif (i_id == 4):
+		print("4\n")
+	else:
+		print("no item {}\n".format(i_id))
+		continue
+
 
 client.close()
