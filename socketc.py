@@ -56,10 +56,15 @@ def recv_thread(client):
 		dic_res = client.recv(1024)
 		print("\nrcv: " + dic_res.decode() + "\n")
 
-Thread(target = recv_thread, args = (client,)).start()
+thrd = Thread(target = recv_thread, args = (client,))
+thrd.setDaemon(True)
+thrd.start()
 
 while True:
 	jid = input("1. humidify 2. heat 3. timer\nwhich one? > ")
+	if (jid < '0' or jid > '9'):
+		continue
+
 	i_id = int(jid)
 	if (i_id == 0):
 		break

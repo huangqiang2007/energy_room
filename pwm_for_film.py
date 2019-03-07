@@ -159,13 +159,13 @@ def pwm_stop(ch):
 def pwm_dumpAll():
 	for ch in range(len(channels)):
 		if (pwm_parameter[ch][7] == True):
-			print("PWM {}: [{}, {}, {}, {}, {}, {}, {}, {}], duty_ratio: {:.1f}%\n".format(ch, \
+			p_dbg(DBG_DEBUG, "\nPWM {}: [{}, {}, {}, {}, {}, {}, {}, {}], duty_ratio: {:.1f}%\n".format(ch, \
 				pwm_parameter[ch][0], pwm_parameter[ch][1], pwm_parameter[ch][2], \
 				pwm_parameter[ch][3], pwm_parameter[ch][4], pwm_parameter[ch][5], \
 				pwm_parameter[ch][6], pwm_parameter[ch][7], \
 				pwm_parameter[ch][6] * 100 / pwm_parameter[ch][5]))
 		else:
-			print("PWM {}: [{}, {}, {}, {}, {}, {}, {}, {}]\n".format(ch, \
+			p_dbg(DBG_DEBUG, "\nPWM {}: [{}, {}, {}, {}, {}, {}, {}, {}]\n".format(ch, \
 				pwm_parameter[ch][0], pwm_parameter[ch][1], pwm_parameter[ch][2], \
 				pwm_parameter[ch][3], pwm_parameter[ch][4], pwm_parameter[ch][5], \
 				pwm_parameter[ch][6], pwm_parameter[ch][7]))

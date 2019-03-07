@@ -30,6 +30,7 @@ OP_SET = 1
 ZONE_LEFT_RIGHT = 0
 ZONE_BACK = 1
 ZONE_BOTTOM = 2
+ZONE_OTHER = 3
 
 #
 # heating level
@@ -47,7 +48,8 @@ HEAT_HIGH = 3
 heatzone_status = [ \
 	[ZONE_LEFT_RIGHT, HEAT_ZERO, False], \
 	[ZONE_BACK, HEAT_ZERO, False], \
-	[ZONE_BOTTOM, HEAT_ZERO, False] \
+	[ZONE_BOTTOM, HEAT_ZERO, False], \
+	[ZONE_OTHER, HEAT_ZERO, False] \
 ]
 
 #
@@ -59,11 +61,11 @@ PWM_PERIOD = 1000
 #
 # pwm duty step
 #
-# low level heat 3 * 1 = 3, duty ratio 30%
-# mid level heat 3 * 2 = 6, duty ratio 60%
-# high level heat 3 * 3 = 9, duty ratio 90%
+# low level heat 300 * 1 = 300, duty ratio 30%
+# mid level heat 300 * 2 = 600, duty ratio 60%
+# high level heat 300 * 3 = 900, duty ratio 90%
 #
-PWM_DUTY_STEP = 3
+PWM_DUTY_STEP = 300
 
 #
 # state feedback
@@ -76,8 +78,8 @@ STATE_FAIL = 0
 #
 PT_SENSOR = 0x01
 PT_HEATFILM = 0x02
-PT_TIME = 0x04
-PT_MISC = 0x08
+PT_TIME = 0x03
+PT_MISC = 0x04
 
 #
 # device subtype for PT_MISC packet type
@@ -114,7 +116,9 @@ j_dic = {}
 con = Condition()
 in_q = queue.Queue(10)
 
-
+#
+# this class is the detail implementation for handling detail of misc device.
+#
 class MiscDeviceHandle:
 
 	def __init__(self, request):
@@ -128,6 +132,10 @@ class MiscDeviceHandle:
 		for i in range(len(device_status)):
 			print("d_s[{0}][1] = {1}\n".format(i, device_status[i][1]))
 
+	#
+	# if heat timer is not set firstly, just only save the heat level value and set the flag of heat zone.
+	# if the flag of heat zone is set beforehand, then config conrresponding PWM channel.
+	#
 	def set_heatfilm(self, zone, level):
 		ret = 0
 		heatzone_status[zone][1] = level
@@ -142,6 +150,9 @@ class MiscDeviceHandle:
 
 		return ret
 
+	#
+	# check if the flag of heat zone is set, if so, config the corresponding PWM channel.
+	#
 	def check_and_set_heatfilm(self):
 		ret = 0
 		for z in range(len(heatzone_status)):
@@ -158,13 +169,14 @@ class MiscDeviceHandle:
 	#
 	def heatTimerCb(self):
 		global device_status
-		print("heatTImerCb()\n")
+		p_dbg(DBG_DEBUG, "heatTImerCb()\n")
 		pwm.pwm_stopAll()
 		pwm.pwm_dumpAll()
 
 		for i in range(len(heatzone_status)):
 			heatzone_status[i][2] = False
 
+		t_dic = {}
 		t_dic["id"] = PT_TIME
 		t_dic["opcode"] = OP_GET
 		t_dic["value"] = device_status[ST_TIME][1]

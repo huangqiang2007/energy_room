@@ -12,20 +12,33 @@ import serial
 import time
 from dbg import *
 
+#
+# sensor command for sample humidity and temperature
+#
 sensor_cmd = '01 03 00 00 00 02 C4 0B'
 sensor_cmd__bytes = bytes.fromhex(sensor_cmd)
+
+#
+# open UART
+#
 def ser_open():
 	global ser
 	ser = serial.Serial('/dev/ttyUSB0', 9600, timeout=0.1)
 
+#
+# close UART
+#
 def ser_close():
 	global ser
 	ser.close()
 
+#
+# read sensor value
+#
 def ser_read():
 	global ser
 	ser.write(sensor_cmd__bytes)
-	p_dbg(DBG_DEBUG, '\nwrite: ' + str(sensor_cmd__bytes))
+	p_dbg(DBG_DEBUG, 'write: ' + str(sensor_cmd__bytes))
 	time.sleep(0.2)
 	n = ser.inWaiting()
 	if n != 0:
@@ -47,13 +60,24 @@ def ser_read():
 
 		return (humidity, temperature)
 
+#
+# sensor sample
+#
 def ser_get_sensor():
+	max_try = 0
 	ser_open()
 	p_dbg(DBG_DEBUG, "ser_get_sensor()\n")
-	while (True):
+
+	#
+	# it can try max 20 times for sample, it avoids to block here.
+	#
+	while (max_try < 20):
+		max_try = max_try + 1
 		(hum, tem) = ser_read()
 		if hum == -1 and tem == -1:
-			p_dbg(DBG_ERROR, "hum: {:.1f}%%RH, tem: {:.1f}\'C".format(hum, tem))
+			p_dbg(DBG_ERROR, "hum: {:.1f}%%RH, tem: {:.1f}\'C, max_try: {}".format(hum, \
+				tem, max_try))
+			time.sleep(0.2)
 			continue
 		else:
 			break
@@ -70,10 +94,6 @@ def ser_poll(interval):
 			continue
 
 		time.sleep(interval)
-
-
-def say_hello():
-	print("say hello\n")
 
 
 if __name__ == '__main__':

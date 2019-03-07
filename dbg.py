@@ -19,4 +19,12 @@ DBG_DEBUG = 3
 
 def p_dbg(dbglevel, text):
 	if (dbglevel <= DBG_DEBUG):
-		print(text)
+		if (dbglevel == DBG_ERROR):
+			print("[error] {}".format(text))
+		elif (dbglevel == DBG_ALERT):
+			print("[alert] {}".format(text))
+		elif (dbglevel == DBG_INFO):
+			print("[info] {}".format(text))
+		elif (dbglevel == DBG_DEBUG):
+			print("[debug] {}".format(text))
+
