@@ -137,8 +137,9 @@ class MiscDeviceHandle:
 		for i in range(len(device_status)):
 			print("d_s[{0}][1] = {1}\n".format(i, device_status[i][1]))
 
-	def __send_feedback_packet(self, json_dic):
+	def __send_feedback_packet(self, json_dic, state):
 		try:
+			json_dic["state"] = state
 			self.request.sendall(str.encode(json.dumps(json_dic)))
 		except:
 			p_dbg(DBG_ERROR, "MiscDeviceHandle __send_feedback_packet() error\n")
@@ -190,9 +191,8 @@ class MiscDeviceHandle:
 		t_dic["id"] = PT_TIME
 		t_dic["opcode"] = OP_GET
 		t_dic["value"] = device_status[ST_TIME][1]
-		t_dic["state"] = STATE_SUCCESS
 		device_status[ST_TIME][1] = 0
-		self.__send_feedback_packet(t_dic)
+		self.__send_feedback_packet(t_dic, STATE_SUCCESS)
 
 	def __handle_lamp(self, json_dic):
 		print("__handle_lamp()\n")
@@ -213,24 +213,30 @@ class MiscDeviceHandle:
 		print("__handle_speaker()\n")
 
 	def handle_misc_device(self, json_dic):
-		j_device = int(json_dic["device"])
+		try:
+			j_device = int(json_dic["device"])
+			on_or_off = int(json_dic["opcode"])
+		except:
+			p_dbg(DBG_ERROR, "handle_misc_device() exception\n")
+			return -2
+
 		if (j_device == ST_LAMP):
-			__handle_lamp(json_dic)
+			self.__handle_lamp(json_dic)
 
 		elif (j_device == ST_READLIGHT):
-			__handle_readlight(json_dic)
+			self.__handle_readlight(json_dic)
 
 		elif (j_device == ST_HUMIDIFIER):
-			__handle_humidifier(json_dic)
+			self.__handle_humidifier(json_dic)
 
 		elif (j_device == ST_FAN):
-			__handle_fan(json_dic)
+			self.__handle_fan(json_dic)
 
 		elif (j_device == ST_OBAR):
-			__handle_obar(json_dic)
+			self.__handle_obar(json_dic)
 
 		elif (j_device == ST_SPEAKER):
-			__handle_speaker(json_dic)
+			self.__handle_speaker(json_dic)
 
 		else:
 			p_dbg(DBG_ERROR, "can't know device: {}\n".format(j_device))
@@ -255,8 +261,9 @@ class MessageParser:
 		self.request.sendall(str("hello world\n").encode())
 		print ("- send_test ...\n")
 
-	def __send_feedback_packet(self, json_dic):
+	def __send_feedback_packet(self, json_dic, state):
 		try:
+			json_dic["state"] = state
 			self.request.sendall(str.encode(json.dumps(json_dic)))
 		except:
 			p_dbg(DBG_ERROR, "MessageParser __send_feedback_packet() error\n")
@@ -266,10 +273,9 @@ class MessageParser:
 		(hum, tem) = hts.ser_get_sensor()
 		json_dic["hum"] = hum
 		json_dic["tem"] = tem
-		json_dic["state"] = 1
 		p_dbg(DBG_DEBUG, "id = {:d}, opcode = {:d}, hum = {:.1f}, tem = {:.1f}\n".format( \
 			json_dic["id"], json_dic["opcode"], json_dic["hum"], json_dic["tem"]))
-		self.__send_feedback_packet(json_dic)
+		self.__send_feedback_packet(json_dic, STATE_SUCCESS)
 
 	def __handle_heatfilm(self, json_dic):
 		p_dbg(DBG_DEBUG, "msg id: {}\n".format(json_dic["id"]))
@@ -278,16 +284,16 @@ class MessageParser:
 			j_heatlevel = int(json_dic["value"])
 		except:
 			p_dbg(DBG_ERROR, "__handle_heatfilm(): parse[\"zone\"] or parse[\"value\"] fail\n")
-			json_dic["state"] = 0
-			self.__send_feedback_packet(json_dic)
+			self.__send_feedback_packet(json_dic, STATE_FAIL)
 			return
 
 		if (self.miscDeviceHandle.set_heatfilm(j_zone, j_heatlevel) < 0):
-			json_dic["state"] = 0 # set fail
+			# set fail
+			self.__send_feedback_packet(json_dic, STATE_FAIL)
 		else:
-			json_dic["state"] = 1 # set success
+			# set success
+			self.__send_feedback_packet(json_dic, STATE_SUCCESS)
 
-		self.__send_feedback_packet(json_dic)
 		p_dbg(DBG_DEBUG, "__handle_heatfilm() done\n")
 
 
@@ -296,8 +302,7 @@ class MessageParser:
 		try:
 			device_status[ST_TIME][1] = int(json_dic["value"])
 		except:
-			json_dic["state"] = 0
-			self.__send_feedback_packet(json_dic)
+			self.__send_feedback_packet(json_dic, STATE_FAIL)
 			p_dbg(DBG_ERROR, "__handle_time(): parse dic[\"value\"] fail\n")
 			return
 
@@ -312,21 +317,20 @@ class MessageParser:
 		# the timer is starting up. so here we have to check if some heat zones need
 		# to enable the corresponding PWM channel.
 		if (self.miscDeviceHandle.check_and_set_heatfilm() < 0):
-			json_dic["state"] = 0 # fail
+			self.__send_feedback_packet(json_dic, STATE_FAIL)
 		else:
-			json_dic["state"] = 1 # success
+			self.__send_feedback_packet(json_dic, STATE_SUCCESS)
 
 		pwm.pwm_dumpAll()
-		self.__send_feedback_packet(json_dic)
 
 	def __handle_misc(self, json_dic):
 		p_dbg(DBG_DEBUG, "msg id: {}\n".format(json_dic["id"]))
 		if (self.miscDeviceHandle.handle_misc_device(json_dic) < 0):
-			json_dic["state"] = 0 # fail
+			# fail
+			self.__send_feedback_packet(json_dic, STATE_FAIL)
 		else:
-			json_dic["state"] = 1 # success
-
-		self.__send_feedback_packet(json_dic)
+			# success
+			self.__send_feedback_packet(json_dic, STATE_SUCCESS)
 
 	#
 	# parse all UI sented packets and handle them seperately
@@ -404,7 +408,6 @@ def get_ip_address(ip_name):
 	sk = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 	ip_addr = socket.inet_ntoa(fcntl.ioctl(sk.fileno(), 0x8915, \
 		struct.pack('256s', ip_name[:15]))[20:24])
-	p_dbg(DBG_ALERT, "ip: {}\n".format(ip_addr))
 	return ip_addr
 #
 # a socket server handler class needed by socketserver
@@ -445,6 +448,7 @@ class SockTCPHandler(socketserver.BaseRequestHandler):
 if __name__ == "__main__":
 	ip = get_ip_address(str.encode("eth0"))
 	HOST,PORT = ip,9998
+	p_dbg(DBG_ALERT, "ip: {}, port: {}\n".format(HOST, PORT))
 	Thread(target = consum_thread, args = (con,)).start()
 	server = socketserver.TCPServer((HOST,PORT), SockTCPHandler)
 	server.serve_forever()
