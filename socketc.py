@@ -20,7 +20,7 @@ heat_dic = {}
 misc_dic = {}
 
 client=socket.socket()
-client.connect(('localhost',9999))
+client.connect(('192.168.1.206',9998))
 
 def get_hum_tem():
 	hid = input("humidify\nid: ")

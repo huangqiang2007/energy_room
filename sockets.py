@@ -224,6 +224,9 @@ class MiscDeviceHandle:
 
 		else:
 			p_dbg(DBG_ERROR, "can't know device: {}\n".format(j_device))
+			return -1
+
+		return 1
 
 
 #
@@ -250,6 +253,7 @@ class MessageParser:
 		(hum, tem) = hts.ser_get_sensor()
 		json_dic["hum"] = hum
 		json_dic["tem"] = tem
+		json_dic["state"] = 1
 		p_dbg(DBG_DEBUG, "id = {:d}, opcode = {:d}, hum = {:.1f}, tem = {:.1f}\n".format( \
 			json_dic["id"], json_dic["opcode"], json_dic["hum"], json_dic["tem"]))
 		self.__send_feedback_packet(json_dic)
@@ -264,6 +268,8 @@ class MessageParser:
 			json_dic["state"] = 1 # set success
 
 		self.__send_feedback_packet(json_dic)
+		p_dbg(DBG_DEBUG, "__handle_heatfilm() done\n")
+
 
 	def __handle_time(self, json_dic):
 		p_dbg(DBG_DEBUG, "msg id: {}, time: {}\n".format(json_dic["id"], json_dic["value"]))
@@ -325,7 +331,10 @@ class MessageParser:
 #
 def consume_queue():
 	global message_parser
+	global in_q
 	p_dbg(DBG_DEBUG, "consume_queue()\n")
+	if (in_q.empty() == True):
+		return
 	j_dic_str = in_q.get()
 	j_dic = json.loads(j_dic_str)
 	message_parser.parseMessage(j_dic)
@@ -362,6 +371,7 @@ class SockTCPHandler(socketserver.BaseRequestHandler):
 					break
 
 				j_str = bytes.decode(self.data)
+				print(j_str)
 				con.acquire()
 				in_q.put(j_str)
 				con.notify()
@@ -380,7 +390,7 @@ class SockTCPHandler(socketserver.BaseRequestHandler):
 		p_dbg(DBG_ALERT, "connect finish()\n")
 
 if __name__ == "__main__":
-	HOST,PORT = "localhost",9999
+	HOST,PORT = "192.168.1.206",9998
 	Thread(target = consum_thread, args = (con,)).start()
 	server = socketserver.TCPServer((HOST,PORT), SockTCPHandler)
 	server.serve_forever()
