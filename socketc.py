@@ -21,6 +21,7 @@ hum_tem_dic = {}
 time_dic = {}
 heat_dic = {}
 misc_dic = {}
+sw_dic = {}
 
 def get_ip_address(ip_name):
 	sk = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -78,6 +79,13 @@ def set_heat_time(id1, opcode, value):
 	time_dic["value"] = value
 	client.send(str.encode(json.dumps(time_dic)))
 
+def set_filmswitch(id1, opcode, zone, value):
+	sw_dic["id"] = id1
+	sw_dic["opcode"] = opcode
+	sw_dic["zone"] = zone
+	sw_dic["value"] = value
+	client.send(str.encode(json.dumps(sw_dic)))
+
 def recv_thread(client):
 	print("recv_thread()\n")
 	while (True):
@@ -95,10 +103,14 @@ def heat_film_thread(client):
 		print("heat_film_thread() run ...\n")
 		set_heat_film(2, 1, 0, 1)
 		set_heat_film(2, 1, 1, 2)
-		set_heat_film(2, 1, 2, 1)
-		set_heat_film(2, 1, 3, 3)
+#		set_heat_film(2, 1, 2, 1)
+#		set_heat_film(2, 1, 3, 3)
 		set_heat_time(3, 1, 30)
+		set_filmswitch(5, 1, 0, 1)
+		set_filmswitch(5, 1, 1, 1)
+
 		time.sleep(60)
+
 
 rcv_thrd = Thread(target = recv_thread, args = (client,))
 rcv_thrd.setDaemon(True)
@@ -113,7 +125,7 @@ heat_thrd.setDaemon(True)
 heat_thrd.start()
 
 while True:
-	jid = input("1. humidify 2. heat 3. timer\nwhich one? > ")
+	jid = input("1. humidify 2. heat 3. timer, 5. zoneswitch\nwhich one? > ")
 	if (jid < '0' or jid > '9'):
 		continue
 
@@ -129,6 +141,10 @@ while True:
 		set_time()
 	elif (i_id == 4):
 		print("4\n")
+	elif (i_id == 5):
+		set_filmswitch(5, 1, 0, 0)
+#		set_filmswitch(5, 1, 1, 0)
+
 	else:
 		print("no item {}\n".format(i_id))
 		continue
