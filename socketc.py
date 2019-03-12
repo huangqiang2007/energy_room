@@ -143,7 +143,7 @@ while True:
 		print("4\n")
 	elif (i_id == 5):
 		set_filmswitch(5, 1, 0, 0)
-#		set_filmswitch(5, 1, 1, 0)
+		set_filmswitch(5, 1, 1, 0)
 
 	else:
 		print("no item {}\n".format(i_id))

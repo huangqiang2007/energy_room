@@ -136,7 +136,8 @@ class MiscDeviceHandle:
 	def __init__(self, request):
 		p_dbg(DBG_INFO, "MiscDeviceHandle()\n")
 		self.request = request
-		self.timeenable = 0
+		self.timerinit = 0
+		self.timerenable = 0
 		# the heat time interval correspond to low level heating
 		self.heat_timer_period = 30
 		self.heat_timer = Timer(self.heat_timer_period * 60, self.heatTimerCb, ())
@@ -151,6 +152,7 @@ class MiscDeviceHandle:
 			self.request.sendall(str.encode(json.dumps(json_dic)))
 		except:
 			p_dbg(DBG_ERROR, "MiscDeviceHandle __send_feedback_packet() error\n")
+
 	#
 	# if heat timer is not set firstly, just only save the heat level value and set the flag of heat zone.
 	# if the flag of heat zone is set beforehand, then config conrresponding PWM channel.
@@ -165,10 +167,12 @@ class MiscDeviceHandle:
 			heatzone_status[zone][2] = True
 			p_dbg(DBG_DEBUG, "set_heatfilm(): mark heat zone {}\n".format(zone))
 		else:
-			ret = pwm.pwm_setSingleChannel(zone, wp.OUTPUT, wp.LOW, PWM_PERIOD, \
-				PWM_DUTY_STEP * level)
-			p_dbg(DBG_DEBUG, "set_heatfilm(): config heat zone {}: period {}, duty {}\n".format( \
-				zone, PWM_PERIOD, PWM_DUTY_STEP * level))
+			if (self.timerenable == 1):
+				ret = pwm.pwm_setSingleChannel(zone, wp.OUTPUT, wp.LOW, PWM_PERIOD, \
+					PWM_DUTY_STEP * level)
+				p_dbg(DBG_DEBUG, "set_heatfilm(): config heat zone {}: period {}, duty {}\n".format( \
+					zone, PWM_PERIOD, PWM_DUTY_STEP * level))
+				pwm.pwm_dumpAll()
 
 		return ret
 
@@ -187,17 +191,25 @@ class MiscDeviceHandle:
 		return ret
 
 	#
+	# disable all heat zones and restore status record to 'False'
+	#
+	def disable_allHeatZone(self):
+		pwm.pwm_stopAll()
+		for i in range(len(heatzone_status)):
+			heatzone_status[i][2] = False
+
+		pwm.pwm_dumpAll()
+
+	#
 	# the timer callback function for heating film
 	#
 	def heatTimerCb(self):
 		global device_status
 		p_dbg(DBG_DEBUG, "heatTImerCb()\n")
-		self.timeenable = 0
-		pwm.pwm_stopAll()
-		pwm.pwm_dumpAll()
 
-		for i in range(len(heatzone_status)):
-			heatzone_status[i][2] = False
+		self.timerinit = 0
+		self.timerenable = 0
+		self.disable_allHeatZone()
 
 		t_dic = {}
 		t_dic["id"] = PT_TIME
@@ -205,6 +217,11 @@ class MiscDeviceHandle:
 		t_dic["value"] = device_status[ST_TIME][1]
 		device_status[ST_TIME][1] = 0
 		self.__send_feedback_packet(t_dic, STATE_SUCCESS)
+
+	def heartDetectCb(self):
+		print("------- heartDetectCb()\n")
+		self.request.close()
+
 
 	def __handle_lamp(self, json_dic):
 		print("__handle_lamp()\n")
@@ -312,7 +329,7 @@ class MessageParser:
 	def __handle_time(self, json_dic):
 		p_dbg(DBG_DEBUG, "msg id: {}, time: {}\n".format(json_dic["id"], json_dic["value"]))
 		try:
-			device_status[ST_TIME][1] = int(json_dic["value"])
+			device_status[ST_TIME][1] = int(json_dic["value"]) + 30
 		except:
 			self.__send_feedback_packet(json_dic, STATE_FAIL)
 			p_dbg(DBG_ERROR, "__handle_time(): parse dic[\"value\"] fail\n")
@@ -325,9 +342,12 @@ class MessageParser:
 		except:
 			p_dbg(DBG_ERROR, "__handle_time() cancel heattimer fail\n")
 
+		self.miscDeviceHandle.timerinit = 1
 		self.miscDeviceHandle.heat_timer = Timer(device_status[ST_TIME][1], \
 			self.miscDeviceHandle.heatTimerCb, ())
-		#self.miscDeviceHandle.heat_timer.start()
+
+		if (self.miscDeviceHandle.timerenable == 1):
+			self.miscDeviceHandle.heat_timer.start()
 
 		self.__send_feedback_packet(json_dic, STATE_SUCCESS)
 
@@ -368,25 +388,30 @@ class MessageParser:
 		if (on_off == SW_ON):
 			# get the pre-setting heat level
 			heatlevel = heatzone_status[zone][1]
-			if (heatlevel < 0 or heatlevel > 3):
+			if (heatlevel <= 0 or heatlevel > 3):
 				p_dbg(DBG_ERROR, "invalid heat level {}\n".format(heatlevel))
 				self.__send_feedback_packet(json_dic, STATE_FAIL)
 				return
 
-			if (self.miscDeviceHandle.set_heatfilm(zone, heatlevel) < 0):
-				# set fail
-				self.__send_feedback_packet(json_dic, STATE_FAIL)
-				return
+			if (self.miscDeviceHandle.timerinit == 1):
+				if (self.miscDeviceHandle.timerenable == 0):
+					self.miscDeviceHandle.heat_timer.start()
+					self.miscDeviceHandle.timerenable = 1
+					p_dbg(DBG_ALERT, "heat timer enable, interval {}\n".format(device_status[ST_TIME][1]))
+
+				if (self.miscDeviceHandle.set_heatfilm(zone, heatlevel) < 0):
+					# set fail
+					self.__send_feedback_packet(json_dic, STATE_FAIL)
+					return
+				else:
+					# set success
+					self.__send_feedback_packet(json_dic, STATE_SUCCESS)
+					p_dbg(DBG_DEBUG, "switch on zone {}\n".format(zone))
+
 			else:
-				# set success
-				self.__send_feedback_packet(json_dic, STATE_SUCCESS)
-
-			if (self.miscDeviceHandle.timeenable == 0):
-				self.miscDeviceHandle.heat_timer.start()
-				self.miscDeviceHandle.timeenable = 1
-				p_dbg(DBG_ALERT, "heat timer enable, interval {}\n".format(device_status[ST_TIME][1]))
-
-			p_dbg(DBG_DEBUG, "switch on zone {}\n".format(zone))
+				# timer is not init
+				self.__send_feedback_packet(json_dic, STATE_FAIL)
+				p_dbg(DBG_DEBUG, "heattimer for zone {} is not init\n".format(zone))
 		else:
 			active_zone = 0
 			pwm.pwm_stop(zone)
@@ -400,7 +425,11 @@ class MessageParser:
 
 			if (active_zone == 0):
 				self.miscDeviceHandle.heat_timer.cancel()
+				self.miscDeviceHandle.timerinit = 0
+				self.miscDeviceHandle.timerenable = 0
 				p_dbg(DBG_ALERT, "filmswitch cancel heattimer\n")
+
+			self.__send_feedback_packet(json_dic, STATE_SUCCESS)
 
 		pwm.pwm_dumpAll()
 
@@ -410,18 +439,33 @@ class MessageParser:
 	def parseMessage(self, json_dic):
 		p_dbg(DBG_DEBUG, "parseMessage()\n")
 		j_id = json_dic["id"]
+
+		# humidity and temperature sensor sample
 		if (j_id == PT_SENSOR):
 			self.__handle_sensor(json_dic)
 
+#			try:
+#				self.miscDeviceHandle.heartDetectTimer.cancel()
+#			except:
+#				print("cancel heartdetect timer fail\n")
+#
+#			self.miscDeviceHandle.heartDetectTimer = Timer(20, self.miscDeviceHandle.heartDetectCb, ())
+#			self.miscDeviceHandle.heartDetectTimer.start()
+#			print("+++++++ heartdetect timer start\n")
+
+		# heat film's heating level control
 		elif (j_id == PT_HEATFILM):
 			self.__handle_heatfilm(json_dic)
 
+		# heat period control
 		elif (j_id == PT_TIME):
 			self.__handle_time(json_dic)
 
+		# lamp etc, switch devices control
 		elif (j_id == PT_MISC):
 			self.__handle_misc(json_dic)
 
+		# film heat zone switch
 		elif (j_id == PT_FILMSWITCH):
 			self.__handle_filmswitch(json_dic)
 
@@ -492,10 +536,10 @@ class SockTCPHandler(socketserver.BaseRequestHandler):
 	def handle(self):
 		global message_parser
 		try:
-			while True:
+			while (True):
 				self.data = self.request.recv(1024)
 				p_dbg(DBG_INFO, "{} send: {}\n".format(self.client_address, self.data))
-				if not self.data:
+				if (not self.data):
 					p_dbg(DBG_ERROR, "connection lost")
 					break
 
