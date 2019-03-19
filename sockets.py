@@ -20,6 +20,7 @@ import fcntl
 import wiringpi as wp
 import hum_tem_sensor as hts
 import pwm_for_film as pwm
+import misc_dev as misc
 from dbg import *
 
 #
@@ -141,6 +142,7 @@ class MiscDeviceHandle:
 		# the heat time interval correspond to low level heating
 		self.heat_timer_period = 30
 		self.heat_timer = Timer(self.heat_timer_period * 60, self.heatTimerCb, ())
+		misc.misc_init()
 
 	def dump_device_status(self):
 		for i in range(len(device_status)):
@@ -167,6 +169,8 @@ class MiscDeviceHandle:
 			heatzone_status[zone][2] = True
 			p_dbg(DBG_DEBUG, "set_heatfilm(): mark heat zone {}\n".format(zone))
 		else:
+			# only if the heat timer is enabled, the heat film's heating level 
+			# can be justified.
 			if (self.timerenable == 1):
 				ret = pwm.pwm_setSingleChannel(zone, wp.OUTPUT, wp.LOW, PWM_PERIOD, \
 					PWM_DUTY_STEP * level)
@@ -223,56 +227,59 @@ class MiscDeviceHandle:
 		self.request.close()
 
 
-	def __handle_lamp(self, json_dic):
-		print("__handle_lamp()\n")
+	def __handle_lamp(self, dev, state):
+		p_dbg(DBG_DEBUG, "__handle_lamp()\n")
+		return misc.misc_configSingleDev(dev, state)
 
-	def __handle_readlight(self, json_dic):
-		print("__handle_readlight()\n")
+	def __handle_readlight(self, dev, state):
+		p_dbg(DBG_DEBUG, "__handle_readlight()\n")
+		return misc.misc_configSingleDev(dev, state)
 
-	def __handle_humidifier(self, json_dic):
-		print("__handle_humidifier()\n")
+	def __handle_humidifier(self, dev, state):
+		p_dbg(DBG_DEBUG, "__handle_humidifier()\n")
+		return misc.misc_configSingleDev(dev, state)
 
-	def __handle_fan(self, json_dic):
-		print("__handle_fan()\n")
+	def __handle_fan(self, dev, state):
+		p_dbg(DBG_DEBUG, "__handle_fan()\n")
+		return misc.misc_configSingleDev(dev, state)
 
-	def __handle_obar(self, json_dic):
-		print("__handle_obar()\n")
+	def __handle_obar(self, dev, state):
+		p_dbg(DBG_DEBUG, "__handle_obar()\n")
+		return misc.misc_configSingleDev(dev, state)
 
-	def __handle_speaker(self, json_dic):
-		print("__handle_speaker()\n")
+	def __handle_speaker(self, dev, state):
+		p_dbg(DBG_DEBUG, "__handle_speaker()\n")
+		return misc.misc_configSingleDev(dev, state)
 
 	def handle_misc_device(self, json_dic):
 		try:
 			j_device = int(json_dic["device"])
-			on_or_off = int(json_dic["opcode"])
+			state = int(json_dic["opcode"])
 		except:
-			p_dbg(DBG_ERROR, "handle_misc_device() exception\n")
+			p_dbg(DBG_ERROR, "handle_misc_device() parse json exception\n")
 			return -2
 
 		if (j_device == ST_LAMP):
-			self.__handle_lamp(json_dic)
+			return self.__handle_lamp(ST_LAMP, state)
 
 		elif (j_device == ST_READLIGHT):
-			self.__handle_readlight(json_dic)
+			return self.__handle_readlight(ST_READLIGHT, state)
 
 		elif (j_device == ST_HUMIDIFIER):
-			self.__handle_humidifier(json_dic)
+			return self.__handle_humidifier(ST_HUMIDIFIER, state)
 
 		elif (j_device == ST_FAN):
-			self.__handle_fan(json_dic)
+			return self.__handle_fan(ST_FAN, state)
 
 		elif (j_device == ST_OBAR):
-			self.__handle_obar(json_dic)
+			return self.__handle_obar(ST_OBAR, state)
 
 		elif (j_device == ST_SPEAKER):
-			self.__handle_speaker(json_dic)
+			return self.__handle_speaker(ST_SPEAKER, state)
 
 		else:
 			p_dbg(DBG_ERROR, "can't know device: {}\n".format(j_device))
 			return -1
-
-		return 1
-
 
 #
 # this class is responsible for parse all packets

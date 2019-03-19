@@ -22,6 +22,7 @@ time_dic = {}
 heat_dic = {}
 misc_dic = {}
 sw_dic = {}
+misc_dic = {}
 
 def get_ip_address(ip_name):
 	sk = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -98,6 +99,24 @@ def poll_humtem_thread(client):
 		get_hum_tem_poll()
 		time.sleep(10)
 
+def misc_configOne(id1,dev, opcode):
+	misc_dic["id"] = id1
+	misc_dic["device"] = dev
+	misc_dic["opcode"] = opcode
+	client.send(str.encode(json.dumps(misc_dic)))
+
+def misc_config():
+	misc_configOne(4, 1, 1)
+	misc_configOne(4, 2, 1)
+	misc_configOne(4, 3, 1)
+	misc_configOne(4, 4, 1)
+	time.sleep(10)
+	misc_configOne(4, 1, 0)
+	misc_configOne(4, 2, 0)
+	misc_configOne(4, 3, 0)
+	misc_configOne(4, 4, 0)
+
+
 def heat_film_thread(client):
 	while (True):
 		print("heat_film_thread() run ...\n")
@@ -125,7 +144,7 @@ heat_thrd.setDaemon(True)
 heat_thrd.start()
 
 while True:
-	jid = input("1. humidify 2. heat 3. timer, 5. zoneswitch\nwhich one? > ")
+	jid = input("1. humidify 2. heat 3. timer, 4. misc dev, 5. zoneswitch\nwhich one? > ")
 	if (jid < '0' or jid > '9'):
 		continue
 
@@ -140,7 +159,7 @@ while True:
 	elif (i_id == 3):
 		set_time()
 	elif (i_id == 4):
-		print("4\n")
+		misc_config()
 	elif (i_id == 5):
 		set_filmswitch(5, 1, 0, 0)
 		set_filmswitch(5, 1, 1, 0)
