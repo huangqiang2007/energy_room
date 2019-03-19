@@ -128,6 +128,8 @@ j_dic = {}
 con = Condition()
 message_queue = queue.Queue(20)
 re_rule = re.compile(r'\{.*?\}+')
+g_server = None
+message_parser = None
 
 #
 # this class is the detail implementation for handling detail of misc device.
@@ -297,6 +299,13 @@ class MessageParser:
 		self.request.sendall(str("hello world\n").encode())
 		print ("- send_test ...\n")
 
+	#
+	# reinit socket request for each packet handling
+	#
+	def reinit_request(self, request):
+		self.request = request
+		self.miscDeviceHandle.request = request
+
 	def __send_feedback_packet(self, json_dic, state):
 		try:
 			json_dic["state"] = state
@@ -443,22 +452,15 @@ class MessageParser:
 	#
 	# parse all UI sented packets and handle them seperately
 	#
-	def parseMessage(self, json_dic):
+	def parseMessage(self, request, json_dic):
 		p_dbg(DBG_DEBUG, "parseMessage()\n")
+
+		self.reinit_request(request)
 		j_id = json_dic["id"]
 
 		# humidity and temperature sensor sample
 		if (j_id == PT_SENSOR):
 			self.__handle_sensor(json_dic)
-
-#			try:
-#				self.miscDeviceHandle.heartDetectTimer.cancel()
-#			except:
-#				print("cancel heartdetect timer fail\n")
-#
-#			self.miscDeviceHandle.heartDetectTimer = Timer(20, self.miscDeviceHandle.heartDetectCb, ())
-#			self.miscDeviceHandle.heartDetectTimer.start()
-#			print("+++++++ heartdetect timer start\n")
 
 		# heat film's heating level control
 		elif (j_id == PT_HEATFILM):
@@ -494,8 +496,10 @@ def consume_queue():
 	# more than one message packets are included in single one network packet.
 	# we have to iterate each message packet and parse them.
 	#
-	packets_str = message_queue.get()
+	q_str = message_queue.get()
 	try:
+		request = q_str["request"]
+		packets_str = q_str["data"]
 		#re_match_packets = re.findall('\{.*?\}+', packets_str, re.M|re.I)
 		re_match_packets = re_rule.findall(packets_str)
 	except:
@@ -505,7 +509,7 @@ def consume_queue():
 	for i in range(len(re_match_packets)):
 		message_dic = json.loads(re_match_packets[i])
 		p_dbg(DBG_DEBUG, "re: {}".format(re_match_packets[i]))
-		message_parser.parseMessage(message_dic)
+		message_parser.parseMessage(request, message_dic)
 
 #
 # one specific thread for consuming message queue
@@ -535,13 +539,25 @@ def get_ip_address(ip_name):
 	ip_addr = socket.inet_ntoa(fcntl.ioctl(sk.fileno(), 0x8915, \
 		struct.pack('256s', ip_name[:15]))[20:24])
 	return ip_addr
+
+def set_TCPserver(server):
+	global g_server
+	g_server = server
+
+def get_TCPserver():
+	global g_server
+	if (g_server):
+		return g_server
+	else:
+		p_dbg(DBG_ERROR, "get_TCPserver g_server is NULL\n")
+		return null
+
 #
 # a socket server handler class needed by socketserver
 #
 class SockTCPHandler(socketserver.BaseRequestHandler):
 
 	def handle(self):
-		global message_parser
 		try:
 			while (True):
 				self.data = self.request.recv(1024)
@@ -551,13 +567,15 @@ class SockTCPHandler(socketserver.BaseRequestHandler):
 					break
 
 				try:
-					j_str = bytes.decode(self.data)
+					rcv_data = bytes.decode(self.data)
+					j_dic["request"] = self.request
+					j_dic["data"] = rcv_data
 				except:
 					p_dbg(DBG_ERROR, "bytes.decode({}), error\n".format(self.data))
 					continue
 
 				con.acquire()
-				message_queue.put(j_str)
+				message_queue.put(j_dic)
 				con.notify()
 				con.release()
 		except Exception as e:
@@ -566,15 +584,22 @@ class SockTCPHandler(socketserver.BaseRequestHandler):
 			self.request.close()
 	def setup(self):
 		global message_parser
-		message_parser = MessageParser(self.request)
+		if (message_parser == None):
+			message_parser = MessageParser(self.request)
+			p_dbg(DBG_ALERT, "MessageParser init\n")
+
 		p_dbg(DBG_ALERT, "connect setup() {}\n".format(self.client_address))
 	def finish(self):
-		p_dbg(DBG_ALERT, "connect finish()\n")
+		server = get_TCPserver()
+		server.close_request(self.request)
+		p_dbg(DBG_ALERT, "connect finish req {}\n".format(self.client_address))
 
 if __name__ == "__main__":
 	ip = get_ip_address(str.encode("eth0"))
 	HOST,PORT = ip,9998
 	p_dbg(DBG_ALERT, "ip: {}, port: {}\n".format(HOST, PORT))
 	Thread(target = consum_thread, args = (con,)).start()
-	server = socketserver.TCPServer((HOST,PORT), SockTCPHandler)
+	#server = socketserver.TCPServer((HOST,PORT), SockTCPHandler)
+	server = socketserver.ThreadingTCPServer((HOST, PORT), SockTCPHandler)
+	set_TCPserver(server)
 	server.serve_forever()
