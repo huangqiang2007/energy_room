@@ -11,6 +11,7 @@
 #
 from threading import Timer, Condition, Thread
 import socketserver
+import sys
 import queue
 import json
 import socket
@@ -595,11 +596,21 @@ class SockTCPHandler(socketserver.BaseRequestHandler):
 		p_dbg(DBG_ALERT, "connect finish req {}\n".format(self.client_address))
 
 if __name__ == "__main__":
+	verbose = False
+	if (len(sys.argv) == 2):
+		print(len(sys.argv), sys.argv[1])
+		if (sys.argv[1] == "True"):
+			verbose = True # output log to stdout for debugging quickly
+		else:
+			verbose = False # output log to file for debug daemon service
+	else:
+		print("argv[1] = True: output log to stdout\nargv[1] = False: output log to file")
+
+	p_dbg_init(verbose)
 	ip = get_ip_address(str.encode("eth0"))
 	HOST,PORT = ip,9998
 	p_dbg(DBG_ALERT, "ip: {}, port: {}\n".format(HOST, PORT))
 	Thread(target = consum_thread, args = (con,)).start()
-	#server = socketserver.TCPServer((HOST,PORT), SockTCPHandler)
 	server = socketserver.ThreadingTCPServer((HOST, PORT), SockTCPHandler)
 	set_TCPserver(server)
 	server.serve_forever()
