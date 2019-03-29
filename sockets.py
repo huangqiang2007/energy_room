@@ -133,6 +133,21 @@ g_server = None
 message_parser = None
 
 #
+# if there's no sensor packets coming more than
+# (g_hearttimer_period) seconds, it indicates network
+# is offline, then disable heating logic
+#
+g_hearttimer_period = 60
+
+#
+# to avoid the case that due to network issue, it can't receive
+# shutdown command when the time period for heating is over.
+# it sets a timer with interval (setted heating time + g_heat_timeout),
+# if this timer is invoked, it has to stop heating logic anyway.
+#
+g_heat_timeout = 120
+
+#
 # this class is the detail implementation for handling detail of misc device.
 #
 class MiscDeviceHandle:
@@ -160,7 +175,7 @@ class MiscDeviceHandle:
 
 	#
 	# if heat timer is not set firstly, just only save the heat level value and set the flag of heat zone.
-	# if the flag of heat zone is set beforehand, then config conrresponding PWM channel.
+	# if the flag of heat zone is set beforehand, config conrresponding PWM channel directly.
 	#
 	def set_heatfilm(self, zone, level):
 		ret = 0
@@ -225,11 +240,6 @@ class MiscDeviceHandle:
 		device_status[ST_TIME][1] = 0
 		self.__send_feedback_packet(t_dic, STATE_SUCCESS)
 
-	def heartDetectCb(self):
-		print("------- heartDetectCb()\n")
-		self.request.close()
-
-
 	def __handle_lamp(self, dev, state):
 		p_dbg(DBG_DEBUG, "__handle_lamp()\n")
 		return misc.misc_configSingleDev(dev, state)
@@ -291,14 +301,10 @@ class MiscDeviceHandle:
 class MessageParser:
 
 	def __init__(self, request):
+		self.heartbeat_timer = Timer(30, self.heartbeat_timerCb, ())
 		self.request = request
 		self.miscDeviceHandle = MiscDeviceHandle(request)
 		p_dbg(DBG_INFO, "init messageparser\n")
-
-	def send_test(self):
-		print ("+ send_test ...\n")
-		self.request.sendall(str("hello world\n").encode())
-		print ("- send_test ...\n")
 
 	#
 	# reinit socket request for each packet handling
@@ -313,6 +319,34 @@ class MessageParser:
 			self.request.sendall(str.encode(json.dumps(json_dic)))
 		except:
 			p_dbg(DBG_ERROR, "MessageParser __send_feedback_packet() error\n")
+
+	#
+	# heartbeat timer call back function
+	#
+	def heartbeat_timerCb(self):
+		p_dbg(DBG_ALERT, "heartbeat_timerCb() enter")
+		self.miscDeviceHandle.heatTimerCb()
+		p_dbg(DBG_ALERT, "heartbeat_timerCb() exit")
+
+	#
+	# as UI client will send sensor sample packet every 10 seconds,it
+	# takes this as heartbeat detection condition. on receiving the packet,
+	# it starts a timer with interval(60 seconds), if there is no such packet
+	# coming again during the 60 seconds,we think there is no heartbeat(network
+	# stall).we chose to stop the whole system.
+	#
+	def __handle_heartbeattimer(self):
+		global g_hearttimer_period
+		try:
+			p_dbg(DBG_DEBUG, "__handle_heartbeattimer()")
+			if (self.heartbeat_timer.is_alive() == True):
+				self.heartbeat_timer.cancel()
+
+			self.heartbeat_timer = Timer(g_hearttimer_period, self.heartbeat_timerCb, ())
+			self.heartbeat_timer.start()
+			p_dbg(DBG_DEBUG, "self.heartbeat_timer.start()")
+		except:
+			p_dbg(DBG_ERROR, "self.heartbeat_timer.start() fail")
 
 	# the private function with '__' prefix
 	def __handle_sensor(self, json_dic):
@@ -346,7 +380,7 @@ class MessageParser:
 	def __handle_time(self, json_dic):
 		p_dbg(DBG_DEBUG, "msg id: {}, time: {}\n".format(json_dic["id"], json_dic["value"]))
 		try:
-			device_status[ST_TIME][1] = int(json_dic["value"]) + 30
+			device_status[ST_TIME][1] = int(json_dic["value"]) * 60 + 30
 		except:
 			self.__send_feedback_packet(json_dic, STATE_FAIL)
 			p_dbg(DBG_ERROR, "__handle_time(): parse dic[\"value\"] fail\n")
@@ -367,16 +401,6 @@ class MessageParser:
 			self.miscDeviceHandle.heat_timer.start()
 
 		self.__send_feedback_packet(json_dic, STATE_SUCCESS)
-
-		# it assumes that it's the time to enable the whole logic for heating when
-		# the timer is starting up. so here we have to check if some heat zones need
-		# to enable the corresponding PWM channel.
-		#if (self.miscDeviceHandle.check_and_set_heatfilm() < 0):
-		#	self.__send_feedback_packet(json_dic, STATE_FAIL)
-		#else:
-		#	self.__send_feedback_packet(json_dic, STATE_SUCCESS)
-
-		#pwm.pwm_dumpAll()
 
 	def __handle_misc(self, json_dic):
 		p_dbg(DBG_DEBUG, "msg id: {}\n".format(json_dic["id"]))
@@ -461,6 +485,7 @@ class MessageParser:
 
 		# humidity and temperature sensor sample
 		if (j_id == PT_SENSOR):
+			self.__handle_heartbeattimer()
 			self.__handle_sensor(json_dic)
 
 		# heat film's heating level control
@@ -583,6 +608,7 @@ class SockTCPHandler(socketserver.BaseRequestHandler):
 			p_dbg(DBG_ERROR, "{}, {}".format(self.client_address, "exception error"))
 		finally:
 			self.request.close()
+
 	def setup(self):
 		global message_parser
 		if (message_parser == None):
@@ -590,6 +616,7 @@ class SockTCPHandler(socketserver.BaseRequestHandler):
 			p_dbg(DBG_ALERT, "MessageParser init\n")
 
 		p_dbg(DBG_ALERT, "connect setup() {}\n".format(self.client_address))
+
 	def finish(self):
 		server = get_TCPserver()
 		server.close_request(self.request)
@@ -607,6 +634,7 @@ if __name__ == "__main__":
 		print("argv[1] = True: output log to stdout\nargv[1] = False: output log to file")
 
 	p_dbg_init(verbose)
+
 	ip = get_ip_address(str.encode("eth0"))
 	HOST,PORT = ip,9998
 	p_dbg(DBG_ALERT, "ip: {}, port: {}\n".format(HOST, PORT))

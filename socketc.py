@@ -124,7 +124,7 @@ def heat_film_thread(client):
 		set_heat_film(2, 1, 1, 2)
 #		set_heat_film(2, 1, 2, 1)
 #		set_heat_film(2, 1, 3, 3)
-		set_heat_time(3, 1, 30)
+		set_heat_time(3, 1, 1)
 		set_filmswitch(5, 1, 0, 1)
 		set_filmswitch(5, 1, 1, 1)
 
