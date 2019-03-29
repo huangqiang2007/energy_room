@@ -190,8 +190,16 @@ class MiscDeviceHandle:
 			# only if the heat timer is enabled, the heat film's heating level 
 			# can be justified.
 			if (self.timerenable == 1):
-				ret = pwm.pwm_setSingleChannel(zone, wp.OUTPUT, wp.LOW, PWM_PERIOD, \
-					PWM_DUTY_STEP * level)
+				if (zone == 0):
+					# left and right sides' heatfilm, need two PWM channels
+					for z in range(2):
+						ret = pwm.pwm_setSingleChannel(z, wp.OUTPUT, wp.LOW, PWM_PERIOD, \
+							PWM_DUTY_STEP * level)
+				else:
+					# other sides' heatfilm
+					ret = pwm.pwm_setSingleChannel(zone + 1, wp.OUTPUT, wp.LOW, PWM_PERIOD, \
+						PWM_DUTY_STEP * level)
+
 				p_dbg(DBG_DEBUG, "set_heatfilm(): config heat zone {}: period {}, duty {}\n".format( \
 					zone, PWM_PERIOD, PWM_DUTY_STEP * level))
 				pwm.pwm_dumpAll()
