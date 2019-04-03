@@ -49,13 +49,13 @@ HEAT_HIGH = 3
 #
 # heatfile zone status record
 #
-# [zone, level, status]
+# [zone, level, status, switch_state]
 #
 heatzone_status = [ \
-	[ZONE_LEFT_RIGHT, HEAT_ZERO, False], \
-	[ZONE_BACK, HEAT_ZERO, False], \
-	[ZONE_BOTTOM, HEAT_ZERO, False], \
-	[ZONE_OTHER, HEAT_ZERO, False] \
+	[ZONE_LEFT_RIGHT, HEAT_ZERO, False, False], \
+	[ZONE_BACK, HEAT_ZERO, False, False], \
+	[ZONE_BOTTOM, HEAT_ZERO, False, False], \
+	[ZONE_OTHER, HEAT_ZERO, False, False] \
 ]
 
 #
@@ -178,6 +178,7 @@ class MiscDeviceHandle:
 	# if the flag of heat zone is set beforehand, config conrresponding PWM channel directly.
 	#
 	def set_heatfilm(self, zone, level):
+		global heatzone_status
 		ret = 0
 
 		# store pre-setting heat level
@@ -190,15 +191,21 @@ class MiscDeviceHandle:
 			# only if the heat timer is enabled, the heat film's heating level 
 			# can be justified.
 			if (self.timerenable == 1):
+				if (heatzone_status[zone][3] == False):
+					p_dbg(DBG_ALERT, "\n------------exit\n")
+					return 0
+
 				if (zone == 0):
 					# left and right sides' heatfilm, need two PWM channels
 					for z in range(2):
 						ret = pwm.pwm_setSingleChannel(z, wp.OUTPUT, wp.LOW, PWM_PERIOD, \
 							PWM_DUTY_STEP * level)
+
 				else:
 					# other sides' heatfilm
 					ret = pwm.pwm_setSingleChannel(zone + 1, wp.OUTPUT, wp.LOW, PWM_PERIOD, \
 						PWM_DUTY_STEP * level)
+
 
 				p_dbg(DBG_DEBUG, "set_heatfilm(): config heat zone {}: period {}, duty {}\n".format( \
 					zone, PWM_PERIOD, PWM_DUTY_STEP * level))
@@ -227,6 +234,7 @@ class MiscDeviceHandle:
 		pwm.pwm_stopAll()
 		for i in range(len(heatzone_status)):
 			heatzone_status[i][2] = False
+			heatzone_status[i][3] = False
 
 		pwm.pwm_dumpAll()
 
@@ -388,7 +396,7 @@ class MessageParser:
 	def __handle_time(self, json_dic):
 		p_dbg(DBG_DEBUG, "msg id: {}, time: {}\n".format(json_dic["id"], json_dic["value"]))
 		try:
-			device_status[ST_TIME][1] = int(json_dic["value"]) * 60 + 30
+			device_status[ST_TIME][1] = int(json_dic["value"]) + 30
 		except:
 			self.__send_feedback_packet(json_dic, STATE_FAIL)
 			p_dbg(DBG_ERROR, "__handle_time(): parse dic[\"value\"] fail\n")
@@ -421,6 +429,7 @@ class MessageParser:
 			self.__send_feedback_packet(json_dic, STATE_SUCCESS)
 
 	def __handle_filmswitch(self, json_dic):
+		global heatzone_status
 		p_dbg(DBG_DEBUG, "__handle_filmswitch()\n")
 		try:
 			zone = json_dic["zone"]
@@ -433,6 +442,16 @@ class MessageParser:
 		if ((zone < 0 or zone > 4) or (on_off != 0 and on_off != 1)):
 			p_dbg(DBG_ALERT, "zone or switch value invalid\n")
 			self.__send_feedback_packet(json_dic, STATE_FAIL)
+			return
+
+
+		try:
+			if (on_off == SW_ON):
+				heatzone_status[zone][3] = True
+			else:
+				heatzone_status[zone][3] = False
+		except:
+			p_dbg(DBG_ERROR, "set heatzone_status[zone][3] error")
 			return
 
 		if (on_off == SW_ON):
@@ -477,6 +496,7 @@ class MessageParser:
 				pwm.pwm_stop(3) # bottom heatfilm
 
 			heatzone_status[zone][2] = False
+			heatzone_status[zone][3] = False
 			p_dbg(DBG_DEBUG, "switch off zone {}\n".format(zone))
 
 			# if all heat zone is disable, it has to cancel heat timer
