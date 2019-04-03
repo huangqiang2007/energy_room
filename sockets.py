@@ -407,6 +407,7 @@ class MessageParser:
 
 		if (self.miscDeviceHandle.timerenable == 1):
 			self.miscDeviceHandle.heat_timer.start()
+			p_dbg(DBG_INFO, "heat_timer.start()")
 
 		self.__send_feedback_packet(json_dic, STATE_SUCCESS)
 
@@ -443,6 +444,10 @@ class MessageParser:
 				return
 
 			if (self.miscDeviceHandle.timerinit == 1):
+				#
+				# when receiving heatfilm's enable command, it begins
+				# to start heat timer.
+				#
 				if (self.miscDeviceHandle.timerenable == 0):
 					self.miscDeviceHandle.heat_timer.start()
 					self.miscDeviceHandle.timerenable = 1
@@ -463,7 +468,14 @@ class MessageParser:
 				p_dbg(DBG_DEBUG, "heattimer for zone {} is not init\n".format(zone))
 		else:
 			active_zone = 0
-			pwm.pwm_stop(zone)
+			if (zone == 0):
+				pwm.pwm_stop(0) # left heatfilm
+				pwm.pwm_stop(1) # right heatfilm
+			elif (zone  == 1):
+				pwm.pwm_stop(2) # back heatfilm
+			elif (zone == 2):
+				pwm.pwm_stop(3) # bottom heatfilm
+
 			heatzone_status[zone][2] = False
 			p_dbg(DBG_DEBUG, "switch off zone {}\n".format(zone))
 
@@ -522,8 +534,6 @@ def consume_queue():
 	global message_parser
 	global message_queue
 	p_dbg(DBG_DEBUG, "consume_queue()\n")
-	if (message_queue.empty() == True):
-		return
 
 	#
 	# the below logic is for handling such case:
@@ -552,7 +562,7 @@ def consume_queue():
 def consum_thread(con):
 	p_dbg(DBG_DEBUG, "consum_thread()\n")
 	while(True):
-		if(message_queue.empty() == True):
+		if(message_queue.qsize() == 0):
 			p_dbg(DBG_INFO, "consumer waiting ...\n")
 			con.acquire()
 			con.wait()
@@ -610,6 +620,7 @@ class SockTCPHandler(socketserver.BaseRequestHandler):
 
 				con.acquire()
 				message_queue.put(j_dic)
+				p_dbg(DBG_DEBUG, "queue.put {}".format(j_dic["data"]))
 				con.notify()
 				con.release()
 		except Exception as e:

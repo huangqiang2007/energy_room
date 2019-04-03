@@ -14,6 +14,7 @@ import json
 import struct
 import fcntl
 import time
+import wiringpi as wp
 
 j_dic = {}
 
@@ -99,22 +100,62 @@ def poll_humtem_thread(client):
 		get_hum_tem_poll()
 		time.sleep(10)
 
+
+GPIO_AH = 7
+GPIO_AU = 0
+GPIO_OB = 2
+GPIO_FAN = 3
+GPIO_WET = 12
+GPIO_LAMP = 13
+GPIO_RDLIGHT = 14
+
+#
+# status record table for all switch channels
+# [gpio, state]
+#
+misc_dev_status = [
+	[GPIO_LAMP, False],
+	[GPIO_RDLIGHT, False],
+	[GPIO_WET, False],
+	[GPIO_FAN, False],
+	[GPIO_OB, False],
+	[GPIO_AU, False],
+	[GPIO_AH, False],
+]
+
+def misc_init():
+	print("misc_init()\n")
+	wp.wiringPiSetup()
+	for i in range(len(misc_dev_status)):
+		pin = misc_dev_status[i][0]
+		wp.pinMode(pin, wp.OUTPUT)
+		wp.digitalWrite(pin, wp.LOW)
+
 def misc_configOne(id1,dev, opcode):
 	misc_dic["id"] = id1
 	misc_dic["device"] = dev
 	misc_dic["opcode"] = opcode
 	client.send(str.encode(json.dumps(misc_dic)))
 
-def misc_config():
-	misc_configOne(4, 1, 1)
-	misc_configOne(4, 2, 1)
-	misc_configOne(4, 3, 1)
-	misc_configOne(4, 4, 1)
-	time.sleep(10)
-	misc_configOne(4, 1, 0)
-	misc_configOne(4, 2, 0)
-	misc_configOne(4, 3, 0)
-	misc_configOne(4, 4, 0)
+def misc_config(on):
+	if (on == 1):
+		misc_configOne(4, 1, 1)
+		misc_configOne(4, 2, 1)
+		misc_configOne(4, 3, 1)
+		misc_configOne(4, 4, 1)
+		misc_configOne(4, 5, 1)
+		misc_configOne(4, 6, 1)
+		misc_configOne(4, 7, 1)
+		print("switch on misc")
+	else:
+		misc_configOne(4, 1, 0)
+		misc_configOne(4, 2, 0)
+		misc_configOne(4, 3, 0)
+		misc_configOne(4, 4, 0)
+		misc_configOne(4, 5, 0)
+		misc_configOne(4, 6, 0)
+		misc_configOne(4, 7, 0)
+		print("switch off misc")
 
 
 def heat_film_thread(client):
@@ -137,11 +178,14 @@ rcv_thrd.start()
 
 hum_thrd = Thread(target = poll_humtem_thread, args = (client,))
 hum_thrd.setDaemon(True)
-hum_thrd.start()
+#hum_thrd.start()
 
 heat_thrd = Thread(target = heat_film_thread, args = (client,))
 heat_thrd.setDaemon(True)
 heat_thrd.start()
+
+pins = (7, 0, 2, 3, 12, 13, 14)
+#misc_init()
 
 while True:
 	jid = input("1. humidify 2. heat 3. timer, 4. misc dev, 5. zoneswitch\nwhich one? > ")
@@ -159,7 +203,21 @@ while True:
 	elif (i_id == 3):
 		set_time()
 	elif (i_id == 4):
-		misc_config()
+		if (0):
+			for pin in pins:
+				wp.pinMode(pin, wp.OUTPUT)
+				wp.digitalWrite(pin, wp.HIGH)
+		else:
+			misc_config(1)
+
+	elif (i_id == 6):
+		if (0):
+			for pin in pins:
+				wp.pinMode(pin, wp.OUTPUT)
+				wp.digitalWrite(pin, wp.LOW)
+		else:
+			misc_config(0)
+
 	elif (i_id == 5):
 		set_filmswitch(5, 1, 0, 0)
 		set_filmswitch(5, 1, 1, 0)
